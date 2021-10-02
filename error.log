@@ -1,0 +1,2 @@
+WARNING:root:404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+INFO:werkzeug:127.0.0.1 - - [30/Sep/2021 21:13:20] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Face Compare Result</title>
+<style>
+    .styled-table {
+    border-collapse: collapse;
+    margin: 25px 0;
+    font-size: 0.9em;
+    font-family: sans-serif;
+    min-width: 400px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+}
+.styled-table thead tr {
+    background-color: #009879;
+    color: #ffffff;
+    text-align: left;
+}
+.styled-table th,
+.styled-table td {
+    padding: 12px 15px;
+}
+.styled-table tbody tr {
+    border-bottom: 1px solid #dddddd;
+}
+
+.styled-table tbody tr:nth-of-type(even) {
+    background-color: #f3f3f3;
+}
+
+.styled-table tbody tr:last-of-type {
+    border-bottom: 2px solid #009879;
+}
+.styled-table tbody tr.active-row {
+    font-weight: bold;
+    color: #009879;
+}
+</style>
+</head>
+<body>
+    <h1>Result</h1>
+    <table class="styled-table">
+        <thead>
+        <tr>
+        <th>
+            Sr No
+        </th>
+        <th>
+            MSPIN
+        </th>
+        <th>
+            Status
+        </th>
+        <th>
+            Reason
+        </th>
+        <th>
+            Time
+        </th>
+        </tr>
+    </thead>
+        <tbody>
+            {%for i in range(0, len) %}
+                <tr>
+                    <td>{{result[i][0]}}</td>
+                    <td>{{result[i][1]}}</td>
+                    {% if result[i][4] %}
+                        <td>Verified</td>
+                    {% else %}
+                        <td>Failed</td>
+                    {% endif %}
+                    <!-- <td>{{result[i][4]}}</td> -->
+                    <td>{{result[i][5]}}</td>
+                    <td>{{result[i][6]}}</td>
+                </tr>
+            {%endfor%}
+        </tbody>
+        
+    </table>
+    <!-- {% if name %}
+    <h1>{{name}} says: </h1>
+    {% endif %}
+    {% if note %} 
+    <p>{{note}}</p>
+    {% endif %} -->
+</body>
+</html>  
