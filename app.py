@@ -18,53 +18,7 @@ import sys
 import requests
 import imutils
 from datetime import datetime
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-
 app = Flask(__name__)
-
-# Configuration for migration
-app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres:postgres@localhost:5432/"+os.environ['db_name']
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
-
-# Tables
-class RegisteredImagesModel(db.Model):
-    __tablename__ = 'registered_images'
-
-    id = db.Column(db.Integer, primary_key=True)
-    mspin = db.Column(db.Integer(), nullable=False)
-    path = db.Column(db.String(), nullable=False)
-    added_date = db.Column(db.DateTime(), nullable=False)
-
-    def __init__(self, mspin, path, added_date):
-        self.mspin = mspin
-        self.path = path
-        self.added_date = added_date
-
-    def __repr__(self):
-        return f"<RegisteredImages {self.name}>"
-
-class ResultModel(db.Model):
-    __tablename__ = 'result'
-
-    id = db.Column(db.Integer, primary_key=True)
-    mspin = db.Column(db.Integer(), nullable=False)
-    registered_img_id = db.Column(db.Integer, db.ForeignKey("registered_images.id"), nullable=False)
-    verified_path = db.Column(db.String(), nullable=False)
-    result = db.Column(db.Boolean(), nullable=False)
-    added_date = db.Column(db.DateTime(), nullable=False)
-
-    def __init__(self, mspin, registered_img_id, verified_path, result, added_date):
-        self.mspin = mspin
-        self.registered_img_id = registered_img_id
-        self.verified_path = verified_path
-        self.result = result
-        self.added_date = added_date
-
-    def __repr__(self):
-        return f"<Result {self.name}>"
-
 
 # Face models
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
@@ -75,24 +29,17 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_size': 100, 'pool_recycle': 280}
 app.config["mydb"] = None
-app.config["mysql_setup"] = None
-app.config["DEBUG"] = True
+app.config["table_setup"] = None
+app.config["db_setup"] = None
+app_db_name = "faceapp"
 
 def open_connection():
     try:
         if app.config["mydb"] is None:
-
-            dbuser=os.environ['db_admin_user']
-            dbpass=os.environ['db_password']
-            
-            dbhost=os.environ['db_server_name']
-            dbname=os.environ['db_name']
-            # dbsslmode = os.environ['db_ssl_mode']
-
-            print("start connection")
-            conn_string = "host={0} user={1} dbname={2} password={3}".format(dbhost, dbuser, dbname, dbpass)
+            setup_db()
+            conn_string = get_conn_string(app_db_name)
             app.config["mydb"] = psycopg2.connect(conn_string)
-            print("connection established")
+            setup_tables()
     except psycopg2.DatabaseError as e:
         logging.error(e)
         sys.exit()
@@ -100,34 +47,71 @@ def open_connection():
         logging.basicConfig(filename='error.log', level=logging.DEBUG)
         logging.info('Connection opened successfully.')
 
-# def setup_mysql():
-#     if app.config["mysql_setup"] is None:
+def get_conn_string(dbname):
+    dbhost= os.environ['db_server_name']
+    dbuser= os.environ['db_admin_user']
+    dbpass= os.environ['db_password']
+    return "host={0} user={1} dbname={2} password={3}".format(dbhost, dbuser, dbname, dbpass)
 
-#         register_table = "CREATE TABLE IF NOT EXISTS registered_images (id int NOT NULL AUTO_INCREMENT, mspin int NOT NULL, path varchar(255) NOT NULL, added_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id))"
+def setup_db():
+    connection = None
+    logging.basicConfig(filename='error.log', level=logging.info)
+    if app.config["db_setup"] is None:
+        try:
+            # In PostgreSQL, default username is 'postgres' and password is 'postgres'.
+            # And also there is a default database exist named as 'postgres'.
+            # Default host is 'localhost' or '127.0.0.1'
+            # And default port is '54322'.
+            conn_string = get_conn_string('postgres')
+            connection = psycopg2.connect(conn_string)
+            print('Database connected.')
+        except:
+            print('Database not connected.')
 
-#         verify_table = "CREATE TABLE IF NOT EXISTS verification_images (id int NOT NULL AUTO_INCREMENT, mspin int NOT NULL, path varchar(255) NOT NULL,added_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id))"
+        if connection is not None:
+            connection.autocommit = True
+            cur = connection.cursor()
+            cur.execute("SELECT datname FROM pg_database;")
+            list_database = cur.fetchall()
+            database_name = app_db_name
+            if (database_name,) in list_database:
+                logging.info('Database already exists')
+            else:
+                cur.execute("CREATE DATABASE "+ app_db_name)
+                logging.info('Database created')
+            connection.close()
+            app.config["db_setup"] = "done"
 
-#         result_table = "CREATE TABLE IF NOT EXISTS result (id int NOT NULL AUTO_INCREMENT, mspin int NOT NULL,registered_img_id int NOT NULL, verified_path varchar(255) NOT NULL, result boolean NOT NULL, error varchar(255), added_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (registered_img_id) REFERENCES registered_images (id), PRIMARY KEY (id))"
+def setup_tables():
+    try:
+        if app.config["table_setup"] is None:
+            logging.basicConfig(filename='error.log', level=logging.DEBUG)
+            logging.info('setting up tables if not exists')
+            register_table = "CREATE TABLE IF NOT EXISTS registered_images (id SERIAL, mspin int NOT NULL, path varchar(255) NOT NULL, added_date timestamp without time zone default (now() at time zone 'utc'), PRIMARY KEY (id))"
 
-#         with app.config["mydb"].cursor() as cur:
-#             result = cur.execute(register_table)
-#             result = cur.execute(verify_table)
-#             result = cur.execute(result_table)
-#             app.config["mydb"].commit()
-#             cur.close()
-#             app.config["mysql_setup"] = True
-#             return result
+            result_table = "CREATE TABLE IF NOT EXISTS result (id SERIAL, mspin int NOT NULL,registered_img_id int NOT NULL, verified_path varchar(255) NOT NULL, result boolean NOT NULL, error varchar(255), added_date timestamp without time zone default (now() at time zone 'utc'), FOREIGN KEY (registered_img_id) REFERENCES registered_images (id), PRIMARY KEY (id))"
+
+            with app.config["mydb"].cursor() as cur:
+                result = cur.execute(register_table)
+                result = cur.execute(result_table)
+                app.config["mydb"].commit()
+                cur.close()
+                app.config["table_setup"] = True
+                return result
+    except psycopg2.DatabaseError as e:
+        logging.error(e)
+        sys.exit()
+    finally:
+        logging.basicConfig(filename='error.log', level=logging.DEBUG)
+        logging.info('Connection opened successfully.')
 
 @app.errorhandler(Exception)
 def handle_error(e):
     code = 500
-    print("hereee")
     if isinstance(e, HTTPException):
         code = e.code
     response = {'message': 'Something went wrong, Please Try again'}
     data = jsonpickle.encode(response)
-    # print("hereee")
-    # logging.info(e)
     logging.basicConfig(filename='error.log', level=logging.DEBUG)
     logging.warning(e)
     return Response(response=data, status=code, mimetype="application/json")
@@ -205,12 +189,10 @@ def get_results(username):
 
 
 def read_image(file_path):
-    print(file_path)
     return cv2.imread(file_path)
 
 
 def face_info(file_path):
-    print(file_path)
     result = False
     known_face = []
     known_image = read_image(file_path)
@@ -295,8 +277,6 @@ def Add():
         image_name = str(round(ts))
         filename = os.path.join(
             app.config['UPLOAD_FOLDER'], image_name + ".png")
-        print("heeere")
-        print(filename)
         with open(filename, 'wb') as f:
             f.write(imgdata)
 
@@ -358,12 +338,8 @@ def Verify():
 
             filename = user_info[0][2].split()[0]
             known_image = read_image(filename)
-            print("after")
-            print(known_image)
             known_encoding = face_recognition.face_encodings(known_image)[0]
-            print("xxx")
             face_result = face_info(new_path)
-            print("laterrr")
             if len(face_result["known_face"]) > 0 and len(face_result["known_encoding"]) > 0 and face_result["eyes"]:
                 if len(face_result["known_face"]) > 1 or len(face_result["known_encoding"]) > 1:
                     response_pickled = jsonpickle.encode({'message': 'Multiple Faces detected. Please try again.'})
